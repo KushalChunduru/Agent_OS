@@ -9,7 +9,8 @@
 - [x] Wire dashboard → gateway end to end (health check over CORS)
 - [x] Wire gateway `/v1/prompt` → MemoryMesh retrieval → InferCraft → response, storing the exchange back
 - [x] InferCraft routing to OpenAI / Anthropic / Ollama when configured, falls back to a labeled stub with zero config
-- [ ] Dashboard UI for sending prompts and viewing responses (currently only shows gateway health)
+- [x] Dashboard UI for sending prompts and viewing responses (agent console + live memory panel)
+- [x] Verified live with a real local model (Ollama `llama3.2:1b`) — full loop confirmed: prompt → memory retrieval → inference → response → memory storage
 
 > **Storage note:** MemoryMesh uses SQLite + a zero-dependency hashing embedding
 > instead of Postgres/pgvector/Qdrant + a real embedding model. This was a deliberate

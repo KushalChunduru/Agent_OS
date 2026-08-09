@@ -46,6 +46,23 @@ cd dashboard && npm install && npm run dev
 - MemoryMesh: http://localhost:8001/health
 - Dashboard: http://localhost:3000
 
+## Getting real LLM responses (InferCraft)
+
+By default `/v1/prompt` falls back to a stub echo — no LLM is configured. InferCraft picks a provider in this order: Anthropic (`ANTHROPIC_API_KEY`) → OpenAI (`OPENAI_API_KEY`) → local Ollama.
+
+**Free, local option — Ollama:**
+
+1. Install from [ollama.com](https://ollama.com) (already common on most dev machines).
+2. Pull a model. On machines with 8GB RAM or less, use the small 1B model — the default 3B `llama3.2` needs ~2GB free RAM to load and will OOM on constrained systems:
+   ```bash
+   ollama pull llama3.2:1b
+   ```
+   With more RAM available, `ollama pull llama3.2` (3B) gives better answers.
+3. Nothing else to configure — the gateway auto-detects a running Ollama at `http://localhost:11434` (override via `OLLAMA_BASE_URL` in `.env`) and picks whichever model you've pulled.
+4. First response after a pull/restart is slow (model load into RAM, 30–70s on CPU); subsequent responses are much faster while Ollama keeps it warm.
+
+**Paid option:** set `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` in `.env` for faster, higher-quality responses (see `.env.example`).
+
 ## Quick start (Docker, optional)
 
 ```bash
@@ -67,7 +84,8 @@ agent-os/
 
 ## Status
 
-Phase 1 MVP running end-to-end natively: dashboard reads gateway health over CORS,
-gateway enforces auth/rate-limit/policy, MemoryMesh stores and semantically searches
-memories. `/v1/prompt` is still a stub — no LLM is called yet. See
+Phase 1 MVP running end-to-end natively, including real LLM inference: dashboard
+sends a prompt → gateway enforces auth/rate-limit/policy → MemoryMesh retrieves
+relevant memories → InferCraft routes to a local Ollama model (or Anthropic/OpenAI
+if configured) → response and exchange are stored back into memory. See
 [docs/ROADMAP.md](docs/ROADMAP.md) for what's next.
