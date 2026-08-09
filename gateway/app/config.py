@@ -10,6 +10,13 @@ class Settings(BaseSettings):
     memory_service_url: str = "http://localhost:8001"
     dashboard_origins: list[str] = ["http://localhost:3000"]
 
+    openai_api_key: str = ""
+    anthropic_api_key: str = ""
+    ollama_base_url: str = "http://localhost:11434"
+
+    # Prompts longer than this are routed to the "large" model tier.
+    infercraft_large_prompt_chars: int = 1000
+
     class Config:
         env_file = ".env"
         extra = "ignore"

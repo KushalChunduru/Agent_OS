@@ -42,6 +42,14 @@ into its own service means:
 
 ## What's actually implemented today
 
-Only **Dashboard**, **Govrix**, and **MemoryMesh** (backed by Postgres/pgvector + Redis)
-exist as running code in this repo. InferCraft, SkillForge, EvolveCraft, and the full
-observability stack are stubs or not yet started — see [ROADMAP.md](ROADMAP.md).
+**Dashboard**, **Govrix**, and **MemoryMesh** exist as running code and work end-to-end
+natively (no Docker required). MemoryMesh currently uses **SQLite** with a lightweight
+hashing-based embedding — not Postgres/pgvector/Qdrant and not a real embedding model —
+to keep local setup to `pip install` with no native build tools or WSL. That's a
+placeholder swap: the interface (`store`, `list`, `search`) matches what a real
+vector-DB-backed implementation would expose, so swapping it in later doesn't change
+the gateway or dashboard.
+
+Govrix's `/v1/prompt` route is still a stub — it runs auth/rate-limit/policy but
+doesn't call MemoryMesh or an LLM yet. InferCraft, SkillForge, EvolveCraft, and the
+full observability stack are not started — see [ROADMAP.md](ROADMAP.md).

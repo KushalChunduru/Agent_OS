@@ -1,18 +1,27 @@
 # Roadmap
 
 ## Phase 1 — Core Platform (this scaffold)
-- [x] FastAPI gateway (Govrix) with health check + basic middleware
-- [x] FastAPI MemoryMesh with pgvector
-- [x] Next.js dashboard shell
-- [x] Docker Compose (Postgres+pgvector, Redis, gateway, memory, dashboard)
-- [ ] Wire dashboard → gateway → memory end to end
-- [ ] vLLM / Ollama integration behind InferCraft stub
+- [x] FastAPI gateway (Govrix) with health check, auth, rate limiting, policy enforcement, audit logging, CORS
+- [x] FastAPI MemoryMesh — store/list/search endpoints, SQLite-backed (see note below)
+- [x] Next.js + Tailwind dashboard shell
+- [x] Native run path (no Docker/WSL required) — verified end-to-end locally
+- [x] Docker Compose as an alternative path (Redis, gateway, memory, dashboard)
+- [x] Wire dashboard → gateway end to end (health check over CORS)
+- [x] Wire gateway `/v1/prompt` → MemoryMesh retrieval → InferCraft → response, storing the exchange back
+- [x] InferCraft routing to OpenAI / Anthropic / Ollama when configured, falls back to a labeled stub with zero config
+- [ ] Dashboard UI for sending prompts and viewing responses (currently only shows gateway health)
+
+> **Storage note:** MemoryMesh uses SQLite + a zero-dependency hashing embedding
+> instead of Postgres/pgvector/Qdrant + a real embedding model. This was a deliberate
+> tradeoff to avoid requiring WSL/Docker/native build tools for local dev. The
+> store/list/search interface matches what a real vector-DB implementation would
+> expose, so swapping it in (Phase 2) shouldn't require changes above MemoryMesh.
 
 ## Phase 2 — Memory & Retrieval
-- [ ] Qdrant integration alongside pgvector
-- [ ] Semantic search endpoint
-- [ ] Long-term / episodic memory types
-- [ ] Audit logging (TimescaleDB)
+- [ ] Real embedding model (sentence-transformers or an API-based embedding)
+- [ ] Qdrant or pgvector integration (swap out SQLite brute-force search)
+- [ ] Long-term / episodic memory types (currently only a single `kind` field, unused by callers)
+- [ ] Audit logging persisted to a database (currently stdout only, see `gateway/app/audit.py`)
 
 ## Phase 3 — Multi-Agent System
 - [ ] Agent registry + task orchestration

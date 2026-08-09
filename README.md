@@ -4,36 +4,70 @@ A self-hosted operating system for autonomous AI agents — governance, memory, 
 
 This repo currently implements the **Phase 1 MVP** slice of the full design (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the target architecture):
 
-- **Govrix** (`gateway/`) — FastAPI gateway: every request is authenticated, rate-limited, and policy-checked before it reaches an LLM.
-- **MemoryMesh** (`memory/`) — FastAPI service backed by Postgres + pgvector for storing and retrieving embeddings.
-- **Dashboard** (`dashboard/`) — Next.js + Tailwind console for agent management and live status.
-- **Storage** — Postgres (with pgvector extension) + Redis, via Docker Compose.
+- **Govrix** (`gateway/`) — FastAPI gateway: every request is authenticated, rate-limited, and policy-checked before it reaches an LLM. CORS-enabled for the dashboard.
+- **MemoryMesh** (`memory/`) — FastAPI service backed by SQLite, storing embeddings and doing similarity search in-process. No external vector DB or model download required — swap in pgvector/Qdrant + a real embedding model later (see [docs/ROADMAP.md](docs/ROADMAP.md)).
+- **Dashboard** (`dashboard/`) — Next.js + Tailwind console, currently shows live gateway health.
+- **Storage** — SQLite file (`memory/memory.db`), created automatically on first run. Redis is optional (rate limiting falls back to in-memory if it's not running).
 
-Later phases (InferCraft model routing, SkillForge skill mining, EvolveCraft self-improvement loop, full observability stack) are scoped in [docs/ROADMAP.md](docs/ROADMAP.md) and will be added incrementally.
+Later phases (InferCraft model routing, SkillForge skill mining, EvolveCraft self-improvement loop, full observability stack, Postgres/Qdrant/Neo4j storage) are scoped in [docs/ROADMAP.md](docs/ROADMAP.md) and will be added incrementally.
 
-## Quick start
+## Quick start (native, no Docker)
+
+Requires Python 3.12+ and Node 20+.
 
 ```bash
 cp .env.example .env
-docker compose -f docker/docker-compose.yml up --build
+python -m venv .venv
+```
+
+Windows:
+```bash
+.venv/Scripts/pip install -r gateway/requirements.txt -r memory/requirements.txt
+```
+
+macOS/Linux:
+```bash
+.venv/bin/pip install -r gateway/requirements.txt -r memory/requirements.txt
+```
+
+Run each in its own terminal:
+
+```bash
+cd gateway && ../.venv/Scripts/python -m uvicorn app.main:app --port 8000
+```
+```bash
+cd memory && ../.venv/Scripts/python -m uvicorn app.main:app --port 8001
+```
+```bash
+cd dashboard && npm install && npm run dev
 ```
 
 - Gateway: http://localhost:8000/health
 - MemoryMesh: http://localhost:8001/health
 - Dashboard: http://localhost:3000
 
+## Quick start (Docker, optional)
+
+```bash
+cp .env.example .env
+docker compose -f docker/docker-compose.yml up --build
+```
+
 ## Repo layout
 
 ```
 agent-os/
 ├── gateway/     # Govrix — governance & security gateway (FastAPI)
-├── memory/      # MemoryMesh — persistent memory service (FastAPI + pgvector)
+├── memory/      # MemoryMesh — persistent memory service (FastAPI + SQLite)
 ├── dashboard/   # L0 console (Next.js + Tailwind)
-├── docker/      # docker-compose.yml + service Dockerfiles
+├── docker/      # docker-compose.yml + service Dockerfiles (optional path)
 ├── docs/        # architecture & roadmap
 └── .github/     # CI workflows
 ```
 
 ## Status
 
-Early scaffold — Phase 1 of the roadmap. See [docs/ROADMAP.md](docs/ROADMAP.md) for what's next.
+Phase 1 MVP running end-to-end natively: dashboard reads gateway health over CORS,
+gateway enforces auth/rate-limit/policy, MemoryMesh stores and semantically searches
+memories. `/v1/prompt` is still a stub — no LLM is called yet. See
+[docs/ROADMAP.md](docs/ROADMAP.md) for what's next.

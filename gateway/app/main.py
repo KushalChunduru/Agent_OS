@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.audit import log_decision
 from app.auth import require_auth
 from app.config import settings
+from app.infercraft import route_and_generate
+from app.memory_client import search_memories, store_memory
 from app.policy import PromptRequest, enforce_policy
 from app.rate_limit import check_rate_limit
 
@@ -37,13 +39,25 @@ async def submit_prompt(req: PromptRequest, request: Request, claims: dict = Dep
 
     log_decision(user, req.agent_id, "submit_prompt", allowed=True)
 
-    # Phase 1 stub: no MemoryMesh retrieval or InferCraft routing wired up yet.
-    # This just echoes back so the dashboard has something to call end-to-end.
+    memories = await search_memories(req.agent_id, req.prompt)
+    if memories:
+        context = "\n".join(f"- {m['content']}" for m in memories)
+        augmented_prompt = f"Relevant context:\n{context}\n\nUser: {req.prompt}"
+    else:
+        augmented_prompt = req.prompt
+
+    result = await route_and_generate(augmented_prompt, req.max_tokens)
+
+    await store_memory(req.agent_id, f"User asked: {req.prompt}", kind="episodic")
+    await store_memory(req.agent_id, f"Agent replied: {result.text}", kind="episodic")
+
     return {
         "agent_id": req.agent_id,
         "user": user,
-        "response": f"[stub] received prompt of {len(req.prompt)} chars, "
-                     f"InferCraft routing not yet implemented",
+        "response": result.text,
+        "provider": result.provider,
+        "model": result.model,
+        "memories_used": len(memories),
     }
 
 
