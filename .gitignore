@@ -26,6 +26,10 @@ docker/data/
 # SQLite
 *.db
 
+# Qdrant local/embedded storage
+memory/qdrant_data/
+gateway/audit.db
+
 # Logs
 *.log
 

@@ -1,29 +1,22 @@
-from contextlib import asynccontextmanager
+import uuid
+from typing import Literal
 
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from pydantic import BaseModel
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import Base, engine, get_session
-from app.embeddings import cosine_similarity, embed
-from app.models import Memory
+from app.embeddings import embed
+from app.kinds import is_expired, recency_boost
+from app.vectorstore import delete_memories, list_memories, search_memories, upsert_memory
 
+MemoryKind = Literal["working", "episodic", "semantic", "long_term"]
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield
-
-
-app = FastAPI(title="MemoryMesh", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="MemoryMesh", version="0.1.0")
 
 
 class MemoryIn(BaseModel):
     agent_id: str
     content: str
-    kind: str = "semantic"
+    kind: MemoryKind = "semantic"
 
 
 class MemoryOut(BaseModel):
@@ -32,9 +25,6 @@ class MemoryOut(BaseModel):
     kind: str
     content: str
 
-    class Config:
-        from_attributes = True
-
 
 @app.get("/health")
 async def health() -> dict:
@@ -42,23 +32,27 @@ async def health() -> dict:
 
 
 @app.post("/v1/memories", response_model=MemoryOut)
-async def store_memory(payload: MemoryIn, session: AsyncSession = Depends(get_session)) -> Memory:
-    memory = Memory(
-        agent_id=payload.agent_id,
-        kind=payload.kind,
-        content=payload.content,
-        embedding=embed(payload.content),
-    )
-    session.add(memory)
-    await session.commit()
-    await session.refresh(memory)
-    return memory
+async def store_memory(payload: MemoryIn) -> dict:
+    embedding = await embed(payload.content)
+    memory_id = str(uuid.uuid4())
+    return upsert_memory(memory_id, payload.agent_id, payload.kind, payload.content, embedding)
+
+
+def _prune_expired_working(records: list[dict]) -> list[dict]:
+    """Working memory is session-scoped; drop expired entries and delete them lazily on read."""
+    live, expired_ids = [], []
+    for r in records:
+        if is_expired(r):
+            expired_ids.append(r["id"])
+        else:
+            live.append(r)
+    delete_memories(expired_ids)
+    return live
 
 
 @app.get("/v1/memories/{agent_id}", response_model=list[MemoryOut])
-async def list_memories(agent_id: str, session: AsyncSession = Depends(get_session)) -> list[Memory]:
-    result = await session.execute(select(Memory).where(Memory.agent_id == agent_id).order_by(Memory.created_at.desc()))
-    return list(result.scalars())
+async def list_memories_endpoint(agent_id: str) -> list[dict]:
+    return _prune_expired_working(list_memories(agent_id))
 
 
 class SearchRequest(BaseModel):
@@ -68,9 +62,8 @@ class SearchRequest(BaseModel):
 
 
 @app.post("/v1/memories/search", response_model=list[MemoryOut])
-async def search_memories(payload: SearchRequest, session: AsyncSession = Depends(get_session)) -> list[Memory]:
-    query_vec = embed(payload.query)
-    result = await session.execute(select(Memory).where(Memory.agent_id == payload.agent_id))
-    candidates = list(result.scalars())
-    candidates.sort(key=lambda m: cosine_similarity(m.embedding, query_vec), reverse=True)
+async def search_memories_endpoint(payload: SearchRequest) -> list[dict]:
+    query_vec = await embed(payload.query)
+    candidates = _prune_expired_working(search_memories(payload.agent_id, query_vec, payload.top_k))
+    candidates.sort(key=lambda r: r["score"] + recency_boost(r), reverse=True)
     return candidates[: payload.top_k]

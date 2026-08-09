@@ -17,11 +17,11 @@ type Layer = {
 const layers: Layer[] = [
   { code: "L0", name: "Dashboard Console", desc: "Agent management, live monitoring, this UI.", status: "live" },
   { code: "L1", name: "Govrix Scout", desc: "Governance & security — auth, rate limits, policy checks, audit log. Nothing bypasses this layer.", status: "live" },
-  { code: "L2A", name: "MemoryMesh", desc: "Persistent memory — store, list, semantic search.", status: "live" },
+  { code: "L2A", name: "MemoryMesh", desc: "Persistent memory — Qdrant vector search (embedded, no server) + Ollama embeddings, with working/episodic/semantic/long_term memory types.", status: "live" },
   { code: "L2B", name: "InferCraft", desc: "Model routing — Anthropic, OpenAI, or local Ollama, chosen automatically.", status: "live" },
   { code: "L2C", name: "SkillForge", desc: "Mines repeated workflows into reusable skills.", status: "planned" },
   { code: "L2E", name: "EvolveCraft", desc: "Self-improvement loop — proposes changes, never auto-applies them.", status: "planned" },
-  { code: "L3", name: "Storage", desc: "SQLite today; Postgres/pgvector, Qdrant, Neo4j as it scales.", status: "stub" },
+  { code: "L3", name: "Storage", desc: "Qdrant (embedded) + SQLite today; TimescaleDB, Neo4j, ScyllaDB as it scales to per-workload stores.", status: "stub" },
   { code: "L4", name: "Observability", desc: "Prometheus, Grafana, RAGAS, Locust.", status: "planned" },
 ];
 
@@ -61,7 +61,7 @@ const features = [
 ];
 
 const stack = [
-  "FastAPI", "Next.js", "TailwindCSS", "SQLite", "Ollama",
+  "FastAPI", "Next.js", "TailwindCSS", "Qdrant", "SQLite", "Ollama",
   "Anthropic", "OpenAI", "Docker Compose", "Redis",
 ];
 

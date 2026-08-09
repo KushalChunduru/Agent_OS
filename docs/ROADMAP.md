@@ -12,17 +12,16 @@
 - [x] Dashboard UI for sending prompts and viewing responses (agent console + live memory panel)
 - [x] Verified live with a real local model (Ollama `llama3.2:1b`) — full loop confirmed: prompt → memory retrieval → inference → response → memory storage
 
-> **Storage note:** MemoryMesh uses SQLite + a zero-dependency hashing embedding
-> instead of Postgres/pgvector/Qdrant + a real embedding model. This was a deliberate
-> tradeoff to avoid requiring WSL/Docker/native build tools for local dev. The
-> store/list/search interface matches what a real vector-DB implementation would
-> expose, so swapping it in (Phase 2) shouldn't require changes above MemoryMesh.
-
 ## Phase 2 — Memory & Retrieval
-- [ ] Real embedding model (sentence-transformers or an API-based embedding)
-- [ ] Qdrant or pgvector integration (swap out SQLite brute-force search)
-- [ ] Long-term / episodic memory types (currently only a single `kind` field, unused by callers)
-- [ ] Audit logging persisted to a database (currently stdout only, see `gateway/app/audit.py`)
+- [x] Real embedding model — Ollama `all-minilm` (384-dim), replacing the Phase 1 hashing approximation. Falls back to the hash embedding if Ollama is unreachable so the service degrades instead of failing outright.
+- [x] Qdrant integration — swapped SQLite's brute-force cosine scan for `qdrant-client`'s embedded/local mode (no server, no Docker; data lives in `memory/qdrant_data/`). MemoryMesh no longer has a SQL database at all.
+- [x] Working / episodic / semantic / long_term memory types now have real behavior: `working` expires after 60 minutes and is pruned lazily on read; `episodic` gets an exponentially-decaying recency boost in search ranking; `semantic`/`long_term` are stable regardless of age. See `memory/app/kinds.py`.
+- [x] Audit logging persisted to SQLite (`gateway/audit.db`) via `gateway/app/audit.py`, queryable at `GET /v1/audit`. Console logging kept alongside.
+
+> **Storage note:** MemoryMesh's Qdrant runs in **embedded/local mode** — it's a
+> Python-in-process index backed by a local directory, not a server. This keeps
+> the native (no-Docker) run path intact. Local mode file-locks its data
+> directory, so only one MemoryMesh process can run against it at a time.
 
 ## Phase 3 — Multi-Agent System
 - [ ] Agent registry + task orchestration

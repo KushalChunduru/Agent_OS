@@ -73,13 +73,23 @@ async def _call_openai(prompt: str, max_tokens: int, model: str) -> InferenceRes
         return InferenceResult(provider="openai", model=model, text=text)
 
 
+# Embedding-only models (e.g. MemoryMesh's all-minilm) can't serve /api/generate
+# and return a 400 if picked; their family is reported as "bert" by Ollama, unlike
+# generation-capable models (llama, qwen, mistral, ...).
+_EMBEDDING_ONLY_FAMILIES = {"bert"}
+
+
 async def _probe_ollama() -> str | None:
     async with httpx.AsyncClient(timeout=2.0) as client:
         try:
             resp = await client.get(f"{settings.ollama_base_url}/api/tags")
             resp.raise_for_status()
             models = resp.json().get("models", [])
-            return models[0]["name"] if models else None
+            for model in models:
+                families = set(model.get("details", {}).get("families") or [])
+                if not families & _EMBEDDING_ONLY_FAMILIES:
+                    return model["name"]
+            return None
         except httpx.HTTPError:
             return None
 

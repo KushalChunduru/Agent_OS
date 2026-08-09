@@ -42,14 +42,18 @@ into its own service means:
 
 ## What's actually implemented today
 
-**Dashboard**, **Govrix**, and **MemoryMesh** exist as running code and work end-to-end
-natively (no Docker required). MemoryMesh currently uses **SQLite** with a lightweight
-hashing-based embedding — not Postgres/pgvector/Qdrant and not a real embedding model —
-to keep local setup to `pip install` with no native build tools or WSL. That's a
-placeholder swap: the interface (`store`, `list`, `search`) matches what a real
-vector-DB-backed implementation would expose, so swapping it in later doesn't change
-the gateway or dashboard.
+**Dashboard**, **Govrix**, **MemoryMesh**, and a minimal **InferCraft** all exist as
+running code and work end-to-end natively (no Docker required):
 
-Govrix's `/v1/prompt` route is still a stub — it runs auth/rate-limit/policy but
-doesn't call MemoryMesh or an LLM yet. InferCraft, SkillForge, EvolveCraft, and the
-full observability stack are not started — see [ROADMAP.md](ROADMAP.md).
+- MemoryMesh uses **Qdrant in embedded/local mode** (in-process, backed by a local
+  directory — no server, no Docker) for vector search, and **Ollama (`all-minilm`)**
+  for real embeddings, falling back to a hashing approximation if Ollama is
+  unreachable. Memory kinds (`working`/`episodic`/`semantic`/`long_term`) have real
+  behavior: working memory expires, episodic gets a recency boost in ranking.
+- Govrix's `/v1/prompt` route runs auth → rate-limit → policy → MemoryMesh retrieval
+  → InferCraft (routes to Anthropic/OpenAI/Ollama, whichever is configured, else a
+  labeled stub) → stores the exchange back into memory. Audit decisions persist to
+  SQLite, queryable at `GET /v1/audit`.
+
+SkillForge, EvolveCraft, multi-agent orchestration, and the full observability stack
+are not started — see [ROADMAP.md](ROADMAP.md).

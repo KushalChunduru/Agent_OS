@@ -1,8 +1,10 @@
+from contextlib import asynccontextmanager
+
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.audit import log_decision
+from app.audit import init_audit_db, list_recent, log_decision
 from app.auth import require_auth
 from app.config import settings
 from app.infercraft import route_and_generate
@@ -10,7 +12,14 @@ from app.memory_client import search_memories, store_memory
 from app.policy import PromptRequest, enforce_policy
 from app.rate_limit import check_rate_limit
 
-app = FastAPI(title="Govrix Gateway", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_audit_db()
+    yield
+
+
+app = FastAPI(title="Govrix Gateway", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,10 +43,10 @@ async def submit_prompt(req: PromptRequest, request: Request, claims: dict = Dep
     try:
         enforce_policy(req)
     except Exception:
-        log_decision(user, req.agent_id, "submit_prompt", allowed=False, detail="policy_block")
+        await log_decision(user, req.agent_id, "submit_prompt", allowed=False, detail="policy_block")
         raise
 
-    log_decision(user, req.agent_id, "submit_prompt", allowed=True)
+    await log_decision(user, req.agent_id, "submit_prompt", allowed=True)
 
     memories = await search_memories(req.agent_id, req.prompt)
     if memories:
@@ -49,7 +58,7 @@ async def submit_prompt(req: PromptRequest, request: Request, claims: dict = Dep
     try:
         result = await route_and_generate(augmented_prompt, req.max_tokens)
     except httpx.HTTPError as exc:
-        log_decision(user, req.agent_id, "submit_prompt", allowed=True, detail=f"inference_error: {exc}")
+        await log_decision(user, req.agent_id, "submit_prompt", allowed=True, detail=f"inference_error: {exc}")
         raise HTTPException(status_code=502, detail=f"Inference provider error: {exc}") from exc
 
     await store_memory(req.agent_id, f"User asked: {req.prompt}", kind="episodic")
@@ -74,3 +83,8 @@ async def get_memory(agent_id: str) -> list[dict] | dict:
             return resp.json()
         except httpx.HTTPError as exc:
             return {"error": str(exc), "agent_id": agent_id}
+
+
+@app.get("/v1/audit")
+async def get_audit_log(limit: int = 100) -> list[dict]:
+    return await list_recent(limit=min(limit, 500))
