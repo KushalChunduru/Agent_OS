@@ -10,6 +10,7 @@ node_modules/
 .next/
 out/
 dashboard/.turbo/
+*.tsbuildinfo
 
 # Env
 .env

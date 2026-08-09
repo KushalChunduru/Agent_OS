@@ -13,7 +13,7 @@ separate primitives, instead of one monolithic chatbot.
 [![Node 20+](https://img.shields.io/badge/node-20%2B-339933?logo=node.js&logoColor=white)](dashboard/package.json)
 [![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js&logoColor=white)](dashboard/package.json)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](gateway/requirements.txt)
-[![Status](https://img.shields.io/badge/status-Phase%202%20%2F%206-f5a623)](docs/ROADMAP.md)
+[![Status](https://img.shields.io/badge/status-Phase%203%20%2F%206-f5a623)](docs/ROADMAP.md)
 
 [Quick Start](#-quick-start) · [Architecture](#-architecture) · [Live Demo Flow](#-see-it-work) · [Roadmap](#-roadmap) · [Docs](docs/ARCHITECTURE.md)
 
@@ -37,7 +37,12 @@ front end:
   `semantic`/`long_term` memory doesn't.
 - 🔀 **Inference is provider-agnostic.** **InferCraft** routes each prompt to
   whichever provider is configured — Anthropic, OpenAI, or a fully local Ollama
-  model — escalating model tier automatically on harder prompts.
+  model — escalating model tier automatically on harder prompts, or to a
+  `reasoning` tier whenever tools are in play.
+- 🛠️ **Agents can act, not just talk.** Register a named agent with a persona
+  and it can call real tools — a calculator, the current time — mid-response,
+  with results fed back into the same turn. No `eval()`, no unbounded loops:
+  every tool call is sandboxed and capped.
 - 🤝 **Evolution is human-gated.** The planned **EvolveCraft** loop watches
   latency, cost, and quality, and proposes changes as a diff. It never applies
   them itself.
@@ -148,20 +153,28 @@ sequenceDiagram
     U->>D: Type a prompt
     D->>G: POST /v1/prompt
     G->>G: Auth → rate limit → policy check
+    G->>G: Look up registered agent (persona + tier), or fall back to ad-hoc
     G->>M: Search relevant memories
     M-->>G: Ranked memories (vector search + recency)
-    G->>I: Augmented prompt
+    G->>I: Messages + tool schemas
     I->>L: Route to configured provider
-    L-->>I: Response
-    I-->>G: Result
+    L-->>I: Response (or a tool_calls request)
+    opt Model requests a tool
+        I->>I: Execute tool (calculator / current time)
+        I->>L: Feed tool result back, up to 3 rounds
+        L-->>I: Final response
+    end
+    I-->>G: Result + tool call trace
     G->>M: Store the exchange
-    G-->>D: Response + provider/model + memory count
-    D-->>U: Rendered reply
+    G-->>D: Response + provider/model + memory count + tool calls
+    D-->>U: Rendered reply, with any tool calls shown inline
 ```
 
 Try asking something that references an earlier message — the response will cite
 `memories_used: N` in the console, proving retrieval actually happened, not just
-a stateless echo.
+a stateless echo. Ask a math question and you'll see a line like
+`🔧 calculate(65 * 12) → 780` — the agent actually executed the tool, it didn't
+just guess the answer.
 
 ## 🏗️ Architecture
 
@@ -210,9 +223,9 @@ touching the services above them. Full breakdown: [docs/ARCHITECTURE.md](docs/AR
 | Layer | Status | Notes |
 |---|:---:|---|
 | L0 Dashboard | ✅ Live | Landing page + agent console, Next.js + Tailwind |
-| L1 Govrix (governance) | ✅ Live | Auth, rate limiting, policy checks, SQLite-backed audit log |
+| L1 Govrix (governance) | ✅ Live | Auth, rate limiting, policy checks, SQLite-backed audit log + agent registry |
 | L2A MemoryMesh | ✅ Live | Qdrant (embedded/local, no server) + real Ollama embeddings |
-| L2B InferCraft | ✅ Live | Routes to Anthropic / OpenAI / Ollama automatically |
+| L2B InferCraft | ✅ Live | Routes to Anthropic / OpenAI / Ollama automatically; bounded tool-calling loop (calculator, current time) |
 | L2C SkillForge | ⏳ Planned | Mine repeated workflows into reusable skills |
 | L2E EvolveCraft | ⏳ Planned | Self-improvement loop — proposes diffs, never auto-applies |
 | L3 Storage (full) | 🚧 Partial | Qdrant + SQLite today; TimescaleDB/Neo4j/ScyllaDB as it scales |
@@ -232,15 +245,15 @@ Agent_OS/
 
 ## 🗺️ Roadmap
 
-Phase 1 (core platform) and Phase 2 (memory & retrieval) are done. Full detail,
-including what changed under the hood, lives in [docs/ROADMAP.md](docs/ROADMAP.md).
+Phases 1–3 (core platform, memory & retrieval, multi-agent system) are done.
+Full detail, including what changed under the hood and honest caveats on what's
+verified live vs. implemented-but-untested, lives in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 <details>
-<summary><b>Phases 3–6 at a glance</b></summary>
+<summary><b>Phases 4–6 at a glance</b></summary>
 
 | Phase | Focus |
 |---|---|
-| 3 — Multi-Agent System | Agent registry, task orchestration, tool execution |
 | 4 — Skill Management | Skill registry, versioning, human approval workflow |
 | 5 — Observability | Prometheus, Grafana, OpenTelemetry, RAGAS, Locust |
 | 6 — Improvement Engine | EvolveCraft's MAPE-K loop, diff generation, human-gated deploys |
