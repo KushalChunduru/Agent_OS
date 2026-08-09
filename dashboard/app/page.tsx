@@ -1,198 +1,224 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:8000";
 
-type HealthStatus = { status: string; service: string } | null;
+type GatewayState = "checking" | "online" | "offline";
 
-type PromptResponse = {
-  agent_id: string;
-  user: string;
-  response: string;
-  provider: string;
-  model: string;
-  memories_used: number;
+type Layer = {
+  code: string;
+  name: string;
+  desc: string;
+  status: "live" | "stub" | "planned";
 };
 
-type ChatMessage = {
-  role: "user" | "agent" | "error";
-  text: string;
-  meta?: string;
+const layers: Layer[] = [
+  { code: "L0", name: "Dashboard Console", desc: "Agent management, live monitoring, this UI.", status: "live" },
+  { code: "L1", name: "Govrix Scout", desc: "Governance & security — auth, rate limits, policy checks, audit log. Nothing bypasses this layer.", status: "live" },
+  { code: "L2A", name: "MemoryMesh", desc: "Persistent memory — store, list, semantic search.", status: "live" },
+  { code: "L2B", name: "InferCraft", desc: "Model routing — Anthropic, OpenAI, or local Ollama, chosen automatically.", status: "live" },
+  { code: "L2C", name: "SkillForge", desc: "Mines repeated workflows into reusable skills.", status: "planned" },
+  { code: "L2E", name: "EvolveCraft", desc: "Self-improvement loop — proposes changes, never auto-applies them.", status: "planned" },
+  { code: "L3", name: "Storage", desc: "SQLite today; Postgres/pgvector, Qdrant, Neo4j as it scales.", status: "stub" },
+  { code: "L4", name: "Observability", desc: "Prometheus, Grafana, RAGAS, Locust.", status: "planned" },
+];
+
+const statusStyle: Record<Layer["status"], { label: string; dot: string; text: string }> = {
+  live: { label: "LIVE", dot: "bg-[--accent]", text: "text-[--accent]" },
+  stub: { label: "STUB", dot: "bg-[--accent-2]", text: "text-[--accent-2]" },
+  planned: { label: "PLANNED", dot: "bg-slate-600", text: "text-slate-500" },
 };
 
-type Memory = {
-  id: string;
-  agent_id: string;
-  kind: string;
-  content: string;
-};
+function StatusPill({ status }: { status: Layer["status"] }) {
+  const s = statusStyle[status];
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full border border-[--border-strong] px-2 py-0.5 font-mono-tech text-[10px] tracking-widest ${s.text}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
+      {s.label}
+    </span>
+  );
+}
 
-export default function Home() {
-  const [health, setHealth] = useState<HealthStatus>(null);
-  const [healthError, setHealthError] = useState<string | null>(null);
+const features = [
+  {
+    title: "Governance first",
+    desc: "Every request — from dashboard, agent, or API — passes through Govrix before it reaches an LLM. Auth, rate limits, and policy checks are not optional middleware, they're the front door.",
+  },
+  {
+    title: "Persistent memory",
+    desc: "MemoryMesh gives agents working, episodic, and semantic memory that survives across sessions, with a storage interface designed to swap SQLite for a real vector DB without touching callers.",
+  },
+  {
+    title: "Model-agnostic inference",
+    desc: "InferCraft routes each prompt to whichever provider is configured — Anthropic, OpenAI, or a local Ollama model — escalating model tier automatically on longer, harder prompts.",
+  },
+  {
+    title: "Human-gated evolution",
+    desc: "EvolveCraft (planned) watches latency, cost, and quality, and proposes changes as a diff. It never applies them itself — a human always reviews first.",
+  },
+];
 
-  const [agentId, setAgentId] = useState("demo");
-  const [prompt, setPrompt] = useState("");
-  const [sending, setSending] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+const stack = [
+  "FastAPI", "Next.js", "TailwindCSS", "SQLite", "Ollama",
+  "Anthropic", "OpenAI", "Docker Compose", "Redis",
+];
 
-  const [memories, setMemories] = useState<Memory[]>([]);
-  const [memoriesError, setMemoriesError] = useState<string | null>(null);
+export default function Landing() {
+  const [gateway, setGateway] = useState<GatewayState>("checking");
 
   useEffect(() => {
     fetch(`${GATEWAY_URL}/health`)
-      .then((res) => res.json())
-      .then(setHealth)
-      .catch((err) => setHealthError(String(err)));
+      .then((res) => (res.ok ? setGateway("online") : setGateway("offline")))
+      .catch(() => setGateway("offline"));
   }, []);
 
-  async function refreshMemories() {
-    setMemoriesError(null);
-    try {
-      const res = await fetch(`${GATEWAY_URL}/v1/memory/${encodeURIComponent(agentId)}`);
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setMemories(data);
-      } else {
-        setMemoriesError(data.error ?? "Unexpected response");
-      }
-    } catch (err) {
-      setMemoriesError(String(err));
-    }
-  }
-
-  async function sendPrompt() {
-    if (!prompt.trim() || sending) return;
-    const userText = prompt;
-    setMessages((prev) => [...prev, { role: "user", text: userText }]);
-    setPrompt("");
-    setSending(true);
-
-    try {
-      const res = await fetch(`${GATEWAY_URL}/v1/prompt`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agent_id: agentId, prompt: userText }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: res.statusText }));
-        setMessages((prev) => [...prev, { role: "error", text: err.detail ?? "Request failed" }]);
-        return;
-      }
-      const data: PromptResponse = await res.json();
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "agent",
-          text: data.response,
-          meta: `${data.provider}/${data.model} · ${data.memories_used} memories used`,
-        },
-      ]);
-      refreshMemories();
-    } catch (err) {
-      setMessages((prev) => [...prev, { role: "error", text: String(err) }]);
-    } finally {
-      setSending(false);
-    }
-  }
-
   return (
-    <main className="max-w-3xl mx-auto py-16 px-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-semibold mb-2">AgentOS</h1>
-        <p className="text-slate-400">L0 Dashboard Console</p>
-      </div>
-
-      <div className="rounded-lg border border-slate-800 bg-slate-900 p-6">
-        <h2 className="text-sm uppercase tracking-wide text-slate-500 mb-2">Govrix Gateway</h2>
-        {healthError && <p className="text-red-400">Unreachable: {healthError}</p>}
-        {!healthError && !health && <p className="text-slate-400">Checking…</p>}
-        {health && (
-          <p className="text-emerald-400">
-            {health.service} — {health.status}
-          </p>
-        )}
-      </div>
-
-      <div className="rounded-lg border border-slate-800 bg-slate-900 p-6 space-y-4">
-        <h2 className="text-sm uppercase tracking-wide text-slate-500">Agent Console</h2>
-
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-slate-400 shrink-0">Agent ID</label>
-          <input
-            value={agentId}
-            onChange={(e) => setAgentId(e.target.value)}
-            className="flex-1 rounded border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm"
-          />
-          <button
-            onClick={refreshMemories}
-            className="rounded border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800"
+    <main className="min-h-screen">
+      {/* Nav */}
+      <header className="sticky top-0 z-10 border-b border-[--border] bg-[--bg]/85 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+          <div className="font-mono-tech text-sm tracking-widest text-[--muted]">
+            <span className="text-[--text]">[</span>AGENT<span className="text-accent">OS</span><span className="text-[--text]">]</span>
+          </div>
+          <nav className="hidden items-center gap-8 font-mono-tech text-xs uppercase tracking-widest text-[--muted] sm:flex">
+            <a href="#architecture" className="hover:text-[--text]">Architecture</a>
+            <a href="#features" className="hover:text-[--text]">Capabilities</a>
+            <a
+              href="https://github.com/KushalChunduru/Agent_OS"
+              target="_blank"
+              rel="noreferrer"
+              className="hover:text-[--text]"
+            >
+              GitHub
+            </a>
+          </nav>
+          <Link
+            href="/console"
+            className="rounded border border-[--accent] bg-[--accent-dim] px-4 py-2 font-mono-tech text-xs uppercase tracking-widest text-[--accent] hover:bg-[--accent]/20"
           >
-            Load memories
-          </button>
+            Open Console →
+          </Link>
+        </div>
+      </header>
+
+      {/* Hero */}
+      <section className="mx-auto max-w-6xl px-6 pt-20 pb-16">
+        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[--border-strong] px-3 py-1 font-mono-tech text-[11px] uppercase tracking-widest text-[--muted]">
+          <span
+            className={`h-1.5 w-1.5 rounded-full status-dot ${
+              gateway === "online" ? "bg-[--accent]" : gateway === "offline" ? "bg-red-500" : "bg-slate-500"
+            }`}
+          />
+          Govrix Gateway — {gateway === "checking" ? "checking…" : gateway}
         </div>
 
-        <div className="h-72 overflow-y-auto rounded border border-slate-800 bg-slate-950 p-3 space-y-3">
-          {messages.length === 0 && <p className="text-slate-500 text-sm">No messages yet.</p>}
-          {messages.map((m, i) => (
-            <div key={i} className={m.role === "user" ? "text-right" : "text-left"}>
-              <div
-                className={
-                  "inline-block rounded-lg px-3 py-2 text-sm max-w-[85%] " +
-                  (m.role === "user"
-                    ? "bg-sky-900 text-sky-50"
-                    : m.role === "error"
-                      ? "bg-red-950 text-red-300"
-                      : "bg-slate-800 text-slate-100")
-                }
-              >
-                {m.text}
-                {m.meta && <div className="mt-1 text-xs text-slate-400">{m.meta}</div>}
+        <h1 className="max-w-3xl font-display text-4xl font-medium leading-tight tracking-tight text-[--text] sm:text-5xl">
+          A self-hosted operating system for autonomous AI agents.
+        </h1>
+        <p className="mt-6 max-w-2xl text-lg leading-relaxed text-[--muted]">
+          Not another chatbot wrapper. AgentOS is infrastructure — governance, memory,
+          inference routing, and observability run as isolated services, the same way
+          AWS gives cloud apps compute, storage, and networking as separate primitives.
+        </p>
+
+        <div className="mt-8 flex flex-wrap gap-4">
+          <Link
+            href="/console"
+            className="rounded bg-[--accent] px-5 py-3 font-mono-tech text-sm font-medium uppercase tracking-widest text-[--bg] hover:opacity-90"
+          >
+            Open Console
+          </Link>
+          <a
+            href="https://github.com/KushalChunduru/Agent_OS"
+            target="_blank"
+            rel="noreferrer"
+            className="rounded border border-[--border-strong] px-5 py-3 font-mono-tech text-sm uppercase tracking-widest text-[--text] hover:border-[--muted]"
+          >
+            View Source
+          </a>
+        </div>
+      </section>
+
+      {/* Architecture */}
+      <section id="architecture" className="mx-auto max-w-6xl px-6 py-16">
+        <div className="mb-10 flex items-baseline justify-between">
+          <h2 className="font-display text-2xl font-medium text-[--text]">Layered architecture</h2>
+          <span className="font-mono-tech text-xs uppercase tracking-widest text-[--muted]">
+            request flows top → bottom
+          </span>
+        </div>
+
+        <div className="relative">
+          <div className="absolute left-[27px] top-3 bottom-3 w-px bg-[--border-strong] sm:left-[35px]" aria-hidden />
+          <div className="space-y-3">
+            {layers.map((layer) => (
+              <div key={layer.code} className="relative flex items-start gap-4 pl-2 sm:gap-6">
+                <div className="relative z-[1] flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[--border-strong] bg-[--bg-panel] font-mono-tech text-[10px] text-[--muted] sm:h-14 sm:w-14 sm:text-xs">
+                  {layer.code}
+                </div>
+                <div className="panel flex-1 rounded-lg px-4 py-3 sm:px-5 sm:py-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="font-display text-base font-medium text-[--text] sm:text-lg">{layer.name}</h3>
+                    <StatusPill status={layer.status} />
+                  </div>
+                  <p className="mt-1 text-sm leading-relaxed text-[--muted]">{layer.desc}</p>
+                </div>
               </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Features */}
+      <section id="features" className="mx-auto max-w-6xl px-6 py-16">
+        <h2 className="mb-10 font-display text-2xl font-medium text-[--text]">Capabilities</h2>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {features.map((f) => (
+            <div key={f.title} className="panel rounded-lg p-6">
+              <h3 className="font-display text-lg font-medium text-[--text]">{f.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-[--muted]">{f.desc}</p>
             </div>
           ))}
         </div>
+      </section>
 
-        <div className="flex gap-2">
-          <textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                sendPrompt();
-              }
-            }}
-            placeholder="Ask the agent something…"
-            rows={2}
-            className="flex-1 rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm resize-none"
-          />
-          <button
-            onClick={sendPrompt}
-            disabled={sending}
-            className="rounded bg-sky-700 px-4 py-2 text-sm font-medium text-white hover:bg-sky-600 disabled:opacity-50"
-          >
-            {sending ? "Sending…" : "Send"}
-          </button>
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-slate-800 bg-slate-900 p-6">
-        <h2 className="text-sm uppercase tracking-wide text-slate-500 mb-2">MemoryMesh — {agentId}</h2>
-        {memoriesError && <p className="text-red-400 text-sm">{memoriesError}</p>}
-        {!memoriesError && memories.length === 0 && (
-          <p className="text-slate-500 text-sm">No memories loaded yet.</p>
-        )}
-        <ul className="space-y-2">
-          {memories.map((m) => (
-            <li key={m.id} className="text-sm text-slate-300 border-b border-slate-800 pb-2 last:border-0">
-              <span className="text-xs uppercase text-slate-500 mr-2">{m.kind}</span>
-              {m.content}
-            </li>
+      {/* Stack */}
+      <section className="mx-auto max-w-6xl px-6 py-16">
+        <h2 className="mb-6 font-mono-tech text-xs uppercase tracking-widest text-[--muted]">Built with</h2>
+        <div className="flex flex-wrap gap-2">
+          {stack.map((s) => (
+            <span
+              key={s}
+              className="rounded border border-[--border-strong] px-3 py-1.5 font-mono-tech text-xs text-[--muted]"
+            >
+              {s}
+            </span>
           ))}
-        </ul>
-      </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-[--border]">
+        <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-4 px-6 py-8 sm:flex-row sm:items-center">
+          <p className="font-mono-tech text-xs text-[--muted]">
+            AgentOS — Phase 1 MVP. See the{" "}
+            <a
+              href="https://github.com/KushalChunduru/Agent_OS/blob/main/docs/ROADMAP.md"
+              target="_blank"
+              rel="noreferrer"
+              className="text-accent hover:underline"
+            >
+              roadmap
+            </a>{" "}
+            for what&apos;s next.
+          </p>
+          <Link href="/console" className="font-mono-tech text-xs text-accent hover:underline">
+            Open Console →
+          </Link>
+        </div>
+      </footer>
     </main>
   );
 }
