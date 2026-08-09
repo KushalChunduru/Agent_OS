@@ -1,5 +1,6 @@
 import httpx
 from fastapi import Depends, FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.audit import log_decision
 from app.auth import require_auth
@@ -8,6 +9,13 @@ from app.policy import PromptRequest, enforce_policy
 from app.rate_limit import check_rate_limit
 
 app = FastAPI(title="Govrix Gateway", version="0.1.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.dashboard_origins,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/health")

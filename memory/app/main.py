@@ -2,18 +2,17 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 from pydantic import BaseModel
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import Base, engine, get_session
-from app.embeddings import embed
+from app.embeddings import cosine_similarity, embed
 from app.models import Memory
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
-        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
     yield
 
@@ -71,10 +70,7 @@ class SearchRequest(BaseModel):
 @app.post("/v1/memories/search", response_model=list[MemoryOut])
 async def search_memories(payload: SearchRequest, session: AsyncSession = Depends(get_session)) -> list[Memory]:
     query_vec = embed(payload.query)
-    result = await session.execute(
-        select(Memory)
-        .where(Memory.agent_id == payload.agent_id)
-        .order_by(Memory.embedding.cosine_distance(query_vec))
-        .limit(payload.top_k)
-    )
-    return list(result.scalars())
+    result = await session.execute(select(Memory).where(Memory.agent_id == payload.agent_id))
+    candidates = list(result.scalars())
+    candidates.sort(key=lambda m: cosine_similarity(m.embedding, query_vec), reverse=True)
+    return candidates[: payload.top_k]

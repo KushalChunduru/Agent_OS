@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = 60
     redis_url: str = "redis://localhost:6379/0"
     memory_service_url: str = "http://localhost:8001"
+    dashboard_origins: list[str] = ["http://localhost:3000"]
 
     class Config:
         env_file = ".env"

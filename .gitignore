@@ -23,6 +23,9 @@ Thumbs.db
 # Docker
 docker/data/
 
+# SQLite
+*.db
+
 # Logs
 *.log
 
