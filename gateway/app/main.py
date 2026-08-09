@@ -1,5 +1,5 @@
 import httpx
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.audit import log_decision
@@ -46,7 +46,11 @@ async def submit_prompt(req: PromptRequest, request: Request, claims: dict = Dep
     else:
         augmented_prompt = req.prompt
 
-    result = await route_and_generate(augmented_prompt, req.max_tokens)
+    try:
+        result = await route_and_generate(augmented_prompt, req.max_tokens)
+    except httpx.HTTPError as exc:
+        log_decision(user, req.agent_id, "submit_prompt", allowed=True, detail=f"inference_error: {exc}")
+        raise HTTPException(status_code=502, detail=f"Inference provider error: {exc}") from exc
 
     await store_memory(req.agent_id, f"User asked: {req.prompt}", kind="episodic")
     await store_memory(req.agent_id, f"Agent replied: {result.text}", kind="episodic")

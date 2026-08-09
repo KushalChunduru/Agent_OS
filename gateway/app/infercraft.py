@@ -85,7 +85,10 @@ async def _probe_ollama() -> str | None:
 
 
 async def _call_ollama(prompt: str, max_tokens: int, model: str) -> InferenceResult:
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    # Cold model loads on CPU-only/low-RAM hosts routinely take 60-90s+;
+    # a tight timeout here surfaces as a client-side "Failed to fetch" with
+    # no CORS header, since the connection drops before FastAPI can respond.
+    async with httpx.AsyncClient(timeout=180.0) as client:
         resp = await client.post(
             f"{settings.ollama_base_url}/api/generate",
             json={"model": model, "prompt": prompt, "stream": False, "options": {"num_predict": max_tokens}},
