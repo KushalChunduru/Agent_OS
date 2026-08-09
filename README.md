@@ -15,7 +15,7 @@ separate primitives, instead of one monolithic chatbot.
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](gateway/requirements.txt)
 [![Status](https://img.shields.io/badge/status-Phase%203%20%2F%206-f5a623)](docs/ROADMAP.md)
 
-[Quick Start](#-quick-start) · [Architecture](#-architecture) · [Live Demo Flow](#-see-it-work) · [Roadmap](#-roadmap) · [Docs](docs/ARCHITECTURE.md)
+[Quick Start](#-quick-start) · [Architecture](#-architecture) · [Live Demo Flow](#-see-it-work) · [Roadmap](#-roadmap) · [Docs](docs/ARCHITECTURE.md) · [Demo Script](docs/DEMO.md)
 
 </div>
 
