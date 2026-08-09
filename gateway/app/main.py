@@ -62,7 +62,7 @@ async def submit_prompt(req: PromptRequest, request: Request, claims: dict = Dep
 
 
 @app.get("/v1/memory/{agent_id}")
-async def get_memory(agent_id: str) -> dict:
+async def get_memory(agent_id: str) -> list[dict] | dict:
     async with httpx.AsyncClient(timeout=5.0) as client:
         try:
             resp = await client.get(f"{settings.memory_service_url}/v1/memories/{agent_id}")
