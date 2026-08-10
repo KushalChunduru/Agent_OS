@@ -1,10 +1,13 @@
 # AgentOS Demo Walkthrough
 
 **Recorded demo:** [docs/demo/agentos-demo.mp4](demo/agentos-demo.mp4) —
-a ~63s captioned walkthrough recorded live against a running instance
-(landing page → governance/memory → tool-calling → live agent creation).
-A version with a real toggleable subtitle track instead of burned-in
-captions is at [docs/demo/agentos-demo-softsub.mp4](demo/agentos-demo-softsub.mp4).
+a ~57s captioned walkthrough recorded live against a running instance:
+branded intro → full landing page (hero, all architecture layers,
+capability cards) → governance/memory → tool-calling
+(`23 × 4 = 92`, computed not guessed) → live agent creation
+("Billing Bot", answering on-persona) → outro. A version with a real
+toggleable subtitle track instead of burned-in captions is at
+[docs/demo/agentos-demo-softsub.mp4](demo/agentos-demo-softsub.mp4).
 
 A ~4-minute screen-recording script covering every implemented capability:
 governance, memory, tool-calling, agent registry, and the landing page. Every
